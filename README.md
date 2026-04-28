@@ -19,6 +19,8 @@ pip install -r requirements.txt
 export GEMINI_API_KEY=your_key
 ```
 
+**시스템 의존성**: `ffmpeg` 가 PATH 에 있어야 시각 캡처 모듈이 동작 (브루: `brew install ffmpeg`).
+
 `config.yaml` 의 `vault.path` 가 기본 `~/Desktop/Vault` 로 잡혀 있음. 다른 경로면 수정 또는 `--vault` 옵션.
 
 ## 사용
