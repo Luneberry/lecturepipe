@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Local config / secrets
+.env
+.env.local
+config.local.yaml
+
+# Runtime artifacts
+*.log
+tmp/
+output/
+
+# OS
+.DS_Store
+.idea/
+.vscode/

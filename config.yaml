@@ -1,0 +1,28 @@
+vault:
+  path: ~/Desktop/Vault
+  lecture_folder: learning/Lectures
+  assets_folder: learning/Lectures/assets
+
+transcript:
+  language_priority: [ko, en]
+
+translation:
+  target_language: ko
+  chunk_size: 2000
+  gemini_api_key_env: GEMINI_API_KEY
+  gemini_model: gemini-2.0-flash
+
+visual:
+  enabled: true
+  max_captures: 100
+  keywords_dir: keywords
+  scene_detection: true
+  scene_threshold: 0.4          # 0.3→0.4 높여서 민감도 낮춤
+  min_gap_seconds: 15           # 5→15초, 같은 슬라이드 반복 캡처 방지
+  similarity_threshold: 0.92    # 이미지 유사도 92% 이상이면 중복으로 판단·삭제
+
+output:
+  section_interval_minutes: 5
+
+batch:
+  delay_seconds: 2
