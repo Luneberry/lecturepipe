@@ -34,12 +34,18 @@ def make_youtube_link(video_id: str, timestamp: float) -> str:
     return f"https://www.youtube.com/watch?v={video_id}&t={t}s"
 
 
+def _yaml_escape(value: str) -> str:
+    """YAML double-quoted scalar 안에 안전하게 넣을 수 있도록 escape 한다."""
+    return value.replace('\\', '\\\\').replace('"', '\\"')
+
+
 def generate_frontmatter(result: TranscriptResult, language: str) -> str:
     """YAML 프론트매터를 생성한다."""
     today = datetime.now().strftime('%Y-%m-%d')
+    safe_title = _yaml_escape(result.title or "")
     return f"""---
 source: https://www.youtube.com/watch?v={result.video_id}
-title: "{result.title}"
+title: "{safe_title}"
 original_language: {result.language}
 output_language: {language}
 date: {today}

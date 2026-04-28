@@ -57,6 +57,26 @@ def format_section_text(entries: list[TranscriptEntry]) -> str:
     return ' '.join(e.text for e in entries)
 
 
+def split_into_chunks(entries: list[TranscriptEntry], chunk_size: int) -> list[list[TranscriptEntry]]:
+    """섹션 내 entries 를 합산 길이가 chunk_size 글자 이하인 그룹으로 분할한다."""
+    if chunk_size <= 0:
+        return [entries] if entries else []
+    chunks: list[list[TranscriptEntry]] = []
+    current: list[TranscriptEntry] = []
+    current_size = 0
+    for entry in entries:
+        text_len = len(entry.text) + 1
+        if current and current_size + text_len > chunk_size:
+            chunks.append(current)
+            current = []
+            current_size = 0
+        current.append(entry)
+        current_size += text_len
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 PROMPTS = {
     # 번역+요약: 외국어
     'both_foreign': """다음은 {source_lang} 강의 자막의 한 단락입니다. 아래 규칙에 따라 한국어로 번역·정리해주세요.
@@ -158,6 +178,7 @@ def translate_entries(entries: list[TranscriptEntry], source_lang: str,
 
     translation_config = config.get('translation', {})
     model = translation_config.get('gemini_model', 'gemini-2.0-flash')
+    effective_chunk_size = translation_config.get('chunk_size', chunk_size)
     interval = config.get('output', {}).get('section_interval_minutes', 5)
     is_korean = source_lang.startswith('ko')
 
@@ -172,32 +193,43 @@ def translate_entries(entries: list[TranscriptEntry], source_lang: str,
     for i, section in enumerate(sections, 1):
         start = section[0].start
         duration = (section[-1].start + section[-1].duration) - start
-        text = format_section_text(section)
 
         minutes_start = int(start // 60)
         minutes_end = int((start + duration) // 60)
-        print(f"  {label} 중... [{i}/{total}] ({minutes_start}분~{minutes_end}분)", file=sys.stderr)
+        chunks = split_into_chunks(section, effective_chunk_size)
+        chunk_count = len(chunks)
+        chunk_suffix = f" · {chunk_count}청크" if chunk_count > 1 else ""
+        print(f"  {label} 중... [{i}/{total}] ({minutes_start}분~{minutes_end}분{chunk_suffix})", file=sys.stderr)
 
-        prompt = get_prompt(mode, is_korean, source_lang, text)
-
-        result_text = None
+        chunk_outputs = []
         max_retries = 3
-        for attempt in range(1, max_retries + 1):
-            try:
-                result_text = call_gemini(client, prompt, model)
-                break
-            except Exception as e:
-                print(f"\n  ⚠ {label} 실패 (섹션 {i}, 시도 {attempt}/{max_retries}): {e}", file=sys.stderr)
-                if attempt < max_retries:
-                    wait = 2 ** attempt
-                    print(f"  {wait}초 후 재시도...", file=sys.stderr)
-                    time.sleep(wait)
+        for c_idx, chunk in enumerate(chunks, 1):
+            chunk_text = format_section_text(chunk)
+            prompt = get_prompt(mode, is_korean, source_lang, chunk_text)
 
-        if result_text:
-            results.append(TranscriptEntry(text=result_text, start=start, duration=duration))
-        else:
-            print(f"  ✗ 섹션 {i} 최종 실패, 원문 유지", file=sys.stderr)
-            results.append(TranscriptEntry(text=text, start=start, duration=duration))
+            chunk_result = None
+            for attempt in range(1, max_retries + 1):
+                try:
+                    chunk_result = call_gemini(client, prompt, model)
+                    break
+                except Exception as e:
+                    print(f"\n  ⚠ {label} 실패 (섹션 {i}, 청크 {c_idx}/{chunk_count}, 시도 {attempt}/{max_retries}): {e}", file=sys.stderr)
+                    if attempt < max_retries:
+                        wait = 2 ** attempt
+                        print(f"  {wait}초 후 재시도...", file=sys.stderr)
+                        time.sleep(wait)
+
+            if chunk_result:
+                chunk_outputs.append(chunk_result)
+            else:
+                print(f"  ✗ 섹션 {i} 청크 {c_idx} 최종 실패, 원문 유지", file=sys.stderr)
+                chunk_outputs.append(chunk_text)
+
+            if c_idx < chunk_count:
+                time.sleep(0.5)
+
+        combined = "\n\n".join(chunk_outputs)
+        results.append(TranscriptEntry(text=combined, start=start, duration=duration))
 
         # Rate limit 방지
         if i < total:
